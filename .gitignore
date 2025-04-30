@@ -1,5 +1,7 @@
-# Excel files
+# Spider data and Images
 *.xlsx
+*.jpg
+card_images/
 
 # Python
 __pycache__/

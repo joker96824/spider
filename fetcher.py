@@ -9,6 +9,10 @@ import time
 import pandas as pd
 import re
 import atexit
+import os
+import json
+import ast
+from urllib.parse import urlparse
 
 # 全局webdriver实例
 driver = None
@@ -142,4 +146,70 @@ def fetch_card_page(url):
             continue
 
     data['稀有度'] = rare_list
-    return data 
+    return data
+
+def download_card_images(df, output_dir='card_images'):
+    """下载卡片图片"""
+    # 创建输出目录
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    # 下载进度
+    total = len(df)
+    downloaded = 0
+    skipped = 0
+    
+    for idx, row in df.iterrows():
+        try:
+            # 获取图片URL
+            rare_list = row['稀有度']
+            # 如果rare_list是字符串，尝试将其转换为字典列表
+            if isinstance(rare_list, str):
+                try:
+                    # 使用json.loads将字符串转换为Python对象
+                    rare_list = ast.literal_eval(rare_list)
+                    # 确保转换后的对象是列表
+                    if not isinstance(rare_list, list):
+                        rare_list = []
+                except:
+                    rare_list = []
+            
+            if not isinstance(rare_list, list):
+                continue
+                
+            for rare in rare_list:
+                if '图片' in rare and rare['图片']:
+                    image_url = rare['图片']
+                    # 处理文件名中的"/"
+                    filename = rare['编号']
+                    parts = filename.split('/')
+                    if len(parts) > 1:
+                        # 创建子文件夹
+                        sub_dir = os.path.join(output_dir, parts[0])
+                        if not os.path.exists(sub_dir):
+                            os.makedirs(sub_dir)
+                        # 完整的文件路径
+                        file_path = os.path.join(sub_dir, f"{parts[1]}.jpg")
+                    else:
+                        # 如果没有"/"，直接保存在output_dir下
+                        file_path = os.path.join(output_dir, f"{filename}.jpg")
+                    
+                    # 检查文件是否已存在
+                    if os.path.exists(file_path):
+                        print(f"图片已存在，跳过: {file_path}")
+                        skipped += 1
+                        continue
+                    
+                    # 下载图片
+                    response = requests.get(image_url)
+                    if response.status_code == 200:
+                        with open(file_path, 'wb') as f:
+                            f.write(response.content)
+                        downloaded += 1
+                        print(f"已下载图片: {file_path}")
+        except Exception as e:
+            print(f"下载图片时出错: {str(e)}")
+            continue
+    
+    print(f"下载完成！成功下载: {downloaded}，跳过: {skipped}，总计: {total}")
+    return downloaded, total 
