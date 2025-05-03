@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, scrolledtext
-from fetcher import get_card_links, fetch_card_page, cleanup, download_card_images
+from fetcher import get_card_links, fetch_card_page, cleanup, download_card_images, convert_to_sql
 import threading
 import pandas as pd
 import os
@@ -25,6 +25,10 @@ class SpiderGUI:
         # 添加下载图片按钮
         self.btn_download_images = ttk.Button(root, text="下载卡片图片", command=self.start_download_images)
         self.btn_download_images.pack(pady=10)
+        
+        # 添加导出SQL按钮
+        self.btn_export_sql = ttk.Button(root, text="导出SQL文件", command=self.start_export_sql)
+        self.btn_export_sql.pack(pady=10)
         
         # 创建复选框
         self.skip_existing = tk.BooleanVar(value=True)
@@ -199,6 +203,39 @@ class SpiderGUI:
             if not self.is_closing:
                 self.btn_download_images.config(state='normal')
                 self.progress['value'] = 0
+
+    def start_export_sql(self):
+        """启动导出SQL的线程"""
+        if self.is_closing:
+            return
+            
+        if not os.path.exists('card_info.xlsx'):
+            self.log("请先爬取卡片数据！")
+            return
+            
+        self.btn_export_sql.config(state='disabled')
+        self.log("开始导出SQL文件...")
+        thread = threading.Thread(target=self.export_sql_thread)
+        thread.daemon = True
+        thread.start()
+        
+    def export_sql_thread(self):
+        """导出SQL的线程函数"""
+        try:
+            # 读取卡片数据
+            df = pd.read_excel('card_info.xlsx')
+            
+            # 导出SQL文件
+            output_file = convert_to_sql(df)
+            
+            if not self.is_closing:
+                self.log(f"SQL文件导出完成！文件保存在: {output_file}")
+        except Exception as e:
+            if not self.is_closing:
+                self.log(f"导出SQL文件时出错: {str(e)}")
+        finally:
+            if not self.is_closing:
+                self.btn_export_sql.config(state='normal')
 
     def on_closing(self):
         """窗口关闭时的处理函数"""
