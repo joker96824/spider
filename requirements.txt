@@ -1,3 +1,20 @@
-requests
-beautifulsoup4
-tqdm 
+# Web爬虫相关
+requests>=2.31.0
+selenium>=4.18.1
+beautifulsoup4>=4.12.3
+
+# 数据处理相关
+pandas>=2.2.1
+numpy>=1.26.4
+
+# 数据库相关
+psycopg2-binary>=2.9.9
+
+# 工具包
+python-dotenv>=1.0.1
+tqdm>=4.66.2
+urllib3>=2.2.1
+
+# 开发工具
+black>=24.2.0
+pylint>=3.0.3 
