@@ -240,6 +240,9 @@ def convert_to_sql(df, output_file='card_data.sql'):
         '集　团': 'card_group'
     }
     
+    # 数字类型字段
+    numeric_fields = ['等　级', '力　量', '盾　护', '☆　值']
+    
     # 稀有度字段映射
     rarity_mapping = {
         '卡包': 'pack_name',
@@ -254,19 +257,29 @@ def convert_to_sql(df, output_file='card_data.sql'):
     with open(output_file, 'w', encoding='utf-8') as f:
         # 写入创建表的SQL语句
         f.write("-- 创建Card表\n")
-        f.write("DROP TABLE IF EXISTS Card;\n")
+        f.write("DROP TABLE IF EXISTS Card CASCADE;\n")
         f.write("CREATE TABLE Card (\n")
-        f.write("    id SERIAL PRIMARY KEY,\n")
-        
-        # 添加列定义
-        for cn_name, en_name in column_mapping.items():
-            if cn_name in df.columns:
-                if cn_name == '稀有度':
-                    f.write(f"    {en_name} JSONB,\n")
-                else:
-                    f.write(f"    {en_name} TEXT,\n")
-        
-        # 添加操作者相关字段
+        f.write("    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n")
+        f.write("    card_code TEXT NOT NULL,\n")
+        f.write("    card_link TEXT NOT NULL,\n")
+        f.write("    card_number TEXT UNIQUE,\n")
+        f.write("    card_rarity TEXT,\n")
+        f.write("    name_cn TEXT,\n")
+        f.write("    name_jp TEXT,\n")
+        f.write("    nation TEXT,\n")
+        f.write("    clan TEXT,\n")
+        f.write("    grade INTEGER,\n")
+        f.write("    skill TEXT,\n")
+        f.write("    card_power INTEGER,\n")
+        f.write("    shield INTEGER,\n")
+        f.write("    critical INTEGER,\n")
+        f.write("    special_mark TEXT,\n")
+        f.write("    card_type TEXT,\n")
+        f.write("    trigger_type TEXT,\n")
+        f.write("    ability TEXT,\n")
+        f.write("    card_alias TEXT,\n")
+        f.write("    card_group TEXT,\n")
+        f.write("    ability_json JSONB DEFAULT NULL,\n")
         f.write("    create_user_id TEXT NOT NULL DEFAULT current_user,\n")
         f.write("    update_user_id TEXT NOT NULL DEFAULT current_user,\n")
         f.write("    create_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,\n")
@@ -275,6 +288,67 @@ def convert_to_sql(df, output_file='card_data.sql'):
         f.write("    card_version INTEGER DEFAULT 1,\n")
         f.write("    remark TEXT DEFAULT ''\n")
         f.write(");\n\n")
+
+        # 添加Card表的注释
+        f.write("COMMENT ON TABLE Card IS '卡牌基本信息表';\n")
+        f.write("COMMENT ON COLUMN Card.id IS '主键ID';\n")
+        f.write("COMMENT ON COLUMN Card.card_code IS '卡牌代码';\n")
+        f.write("COMMENT ON COLUMN Card.card_link IS '卡牌链接';\n")
+        f.write("COMMENT ON COLUMN Card.card_number IS '卡牌编号';\n")
+        f.write("COMMENT ON COLUMN Card.card_rarity IS '卡牌罕贵度';\n")
+        f.write("COMMENT ON COLUMN Card.name_cn IS '中文名称';\n")
+        f.write("COMMENT ON COLUMN Card.name_jp IS '日文名称';\n")
+        f.write("COMMENT ON COLUMN Card.nation IS '所属国家';\n")
+        f.write("COMMENT ON COLUMN Card.clan IS '所属种族';\n")
+        f.write("COMMENT ON COLUMN Card.grade IS '等级';\n")
+        f.write("COMMENT ON COLUMN Card.skill IS '技能';\n")
+        f.write("COMMENT ON COLUMN Card.card_power IS '力量值';\n")
+        f.write("COMMENT ON COLUMN Card.shield IS '护盾值';\n")
+        f.write("COMMENT ON COLUMN Card.critical IS '暴击值';\n")
+        f.write("COMMENT ON COLUMN Card.special_mark IS '特殊标识';\n")
+        f.write("COMMENT ON COLUMN Card.card_type IS '卡片类型';\n")
+        f.write("COMMENT ON COLUMN Card.trigger_type IS '触发类型';\n")
+        f.write("COMMENT ON COLUMN Card.ability IS '能力描述';\n")
+        f.write("COMMENT ON COLUMN Card.card_alias IS '卡牌别称';\n")
+        f.write("COMMENT ON COLUMN Card.card_group IS '所属集团';\n")
+        f.write("COMMENT ON COLUMN Card.ability_json IS '卡牌技能效果JSON数据，包含主动技能、自动技能和持续技能的效果信息';\n")
+        f.write("COMMENT ON COLUMN Card.create_user_id IS '创建用户';\n")
+        f.write("COMMENT ON COLUMN Card.update_user_id IS '更新用户';\n")
+        f.write("COMMENT ON COLUMN Card.create_time IS '创建时间';\n")
+        f.write("COMMENT ON COLUMN Card.update_time IS '更新时间';\n")
+        f.write("COMMENT ON COLUMN Card.is_deleted IS '是否删除';\n")
+        f.write("COMMENT ON COLUMN Card.card_version IS '版本号';\n")
+        f.write("COMMENT ON COLUMN Card.remark IS '备注信息';\n\n")
+        
+        # 创建CardRarity表
+        f.write("-- 创建CardRarity表\n")
+        f.write("DROP TABLE IF EXISTS CardRarity CASCADE;\n")
+        f.write("CREATE TABLE CardRarity (\n")
+        f.write("    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n")
+        f.write("    card_id UUID REFERENCES Card(id) ON DELETE CASCADE,\n")
+        f.write("    pack_name TEXT,\n")
+        f.write("    card_number TEXT,\n")
+        f.write("    release_info TEXT,\n")
+        f.write("    quote TEXT,\n")
+        f.write("    illustrator TEXT,\n")
+        f.write("    image_url TEXT,\n")
+        f.write("    create_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,\n")
+        f.write("    update_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,\n")
+        f.write("    UNIQUE(pack_name, card_number)\n")
+        f.write(");\n\n")
+
+        # 添加CardRarity表的注释
+        f.write("COMMENT ON TABLE CardRarity IS '卡牌稀有度信息表';\n")
+        f.write("COMMENT ON COLUMN CardRarity.id IS '主键ID';\n")
+        f.write("COMMENT ON COLUMN CardRarity.card_id IS '关联的卡牌ID';\n")
+        f.write("COMMENT ON COLUMN CardRarity.pack_name IS '卡包名称';\n")
+        f.write("COMMENT ON COLUMN CardRarity.card_number IS '卡包内编号';\n")
+        f.write("COMMENT ON COLUMN CardRarity.release_info IS '收录信息';\n")
+        f.write("COMMENT ON COLUMN CardRarity.quote IS '卡牌台词';\n")
+        f.write("COMMENT ON COLUMN CardRarity.illustrator IS '绘师';\n")
+        f.write("COMMENT ON COLUMN CardRarity.image_url IS '卡牌图片URL';\n")
+        f.write("COMMENT ON COLUMN CardRarity.create_time IS '创建时间';\n")
+        f.write("COMMENT ON COLUMN CardRarity.update_time IS '更新时间';\n\n")
         
         # 创建索引
         f.write("-- 创建索引\n")
@@ -282,63 +356,101 @@ def convert_to_sql(df, output_file='card_data.sql'):
         f.write("CREATE INDEX idx_card_name_cn ON Card(name_cn);\n")
         f.write("CREATE INDEX idx_card_name_jp ON Card(name_jp);\n")
         f.write("CREATE INDEX idx_card_create_time ON Card(create_time);\n")
-        f.write("CREATE INDEX idx_card_update_time ON Card(update_time);\n\n")
+        f.write("CREATE INDEX idx_card_update_time ON Card(update_time);\n")
+        f.write("CREATE INDEX idx_card_rarity_card_id ON CardRarity(card_id);\n")
+        f.write("CREATE INDEX idx_card_rarity_pack_name ON CardRarity(pack_name);\n")
+        f.write("CREATE INDEX idx_card_rarity_illustrator ON CardRarity(illustrator);\n\n")
         
         # 写入插入数据的SQL语句
         f.write("-- 插入数据\n")
         for _, row in df.iterrows():
-            columns = []
-            values = []
+            # 插入Card表
+            card_columns = []
+            card_values = []
+            remark = []  # 用于收集备注信息
             
             # 添加基本字段
             for cn_name, en_name in column_mapping.items():
-                if cn_name in df.columns:
+                if cn_name in df.columns and cn_name != '稀有度':
                     value = row[cn_name]
-                    if pd.isna(value):
+                    if pd.isna(value) or value == '-':
+                        # 对于card_code和card_link，不允许为NULL
+                        if en_name in ['card_code', 'card_link']:
+                            print(f"警告：{row['代码'] if '代码' in row else '未知'}的{cn_name}为空")
+                            continue
                         value = 'NULL'
-                    elif cn_name == '稀有度':
-                        # 将稀有度列表转换为JSON字符串，并确保正确处理引号
-                        if isinstance(value, str):
-                            try:
-                                # 如果已经是字符串，尝试解析
-                                value = ast.literal_eval(value)
-                                # 转换字段名
-                                for item in value:
-                                    for old_key, new_key in rarity_mapping.items():
-                                        if old_key in item:
-                                            item[new_key] = item.pop(old_key)
-                            except:
-                                value = []
-                        # 将Python对象转换为JSON字符串
-                        json_str = json.dumps(value, ensure_ascii=False)
-                        # 转义单引号
-                        json_str = json_str.replace("'", "''")
-                        value = f"'{json_str}'::jsonb"
                     else:
-                        # 转义单引号
-                        value = str(value).replace("'", "''")
-                        value = f"'{value}'"
+                        # 处理数字类型字段
+                        if cn_name in numeric_fields:
+                            try:
+                                # 尝试转换为整数
+                                value = int(value)
+                                value = str(value)  # 转换为字符串，因为SQL语句需要
+                            except (ValueError, TypeError):
+                                # 特殊处理力量字段的"15000+"情况
+                                if cn_name == '力　量' and value == '15000+':
+                                    value = '15000'
+                                    remark.append('力量: 15000+')
+                                else:
+                                    print(f"{row['代码']}数据处理失败{cn_name}： {value}")
+                                    value = 'NULL'
+                        else:
+                            # 转义单引号
+                            value = str(value).replace("'", "''")
+                            value = f"'{value}'"
                     
-                    columns.append(en_name)
-                    values.append(value)
-                else:
+                    card_columns.append(en_name)
+                    card_values.append(value)
+                elif cn_name != '稀有度':
                     # 如果字段在映射中但不在DataFrame中，添加NULL值
-                    columns.append(column_mapping[cn_name])
-                    values.append('NULL')
+                    card_columns.append(column_mapping[cn_name])
+                    card_values.append('NULL')
             
             # 添加操作者相关字段
-            columns.extend(['create_user_id', 'update_user_id', 'create_time', 'update_time', 'is_deleted', 'card_version', 'remark'])
-            values.extend([
+            card_columns.extend(['create_user_id', 'update_user_id', 'create_time', 'update_time', 'is_deleted', 'card_version', 'remark'])
+            card_values.extend([
                 'current_user',  # create_user_id
                 'current_user',  # update_user_id
                 'CURRENT_TIMESTAMP',  # create_time
                 'CURRENT_TIMESTAMP',  # update_time
                 'FALSE',  # is_deleted
                 '1',  # card_version
-                "''"  # remark
+                f"'{'; '.join(remark)}'" if remark else "''"  # 如果有备注则添加，否则为空字符串
             ])
             
-            f.write(f"INSERT INTO Card ({', '.join(columns)}) VALUES ({', '.join(values)});\n")
+            # 先插入Card表并获取ID
+            f.write("DO $$\n")
+            f.write("DECLARE\n")
+            f.write("    v_card_id UUID;\n")
+            f.write("BEGIN\n")
+            f.write(f"    INSERT INTO Card ({', '.join(card_columns)}) VALUES ({', '.join(card_values)}) RETURNING id INTO v_card_id;\n\n")
+            
+            # 插入CardRarity表
+            if '稀有度' in df.columns and not pd.isna(row['稀有度']):
+                try:
+                    rarity_list = ast.literal_eval(row['稀有度'])
+                    for rarity in rarity_list:
+                        rarity_columns = ['card_id']
+                        rarity_values = ['v_card_id']  # 使用变量而不是函数调用
+                        
+                        for old_key, new_key in rarity_mapping.items():
+                            if old_key in rarity:
+                                value = rarity[old_key]
+                                if pd.isna(value) or value == '-':
+                                    value = 'NULL'
+                                else:
+                                    # 转义单引号
+                                    value = str(value).replace("'", "''")
+                                    value = f"'{value}'"
+                                
+                                rarity_columns.append(new_key)
+                                rarity_values.append(value)
+                        
+                        f.write(f"    INSERT INTO CardRarity ({', '.join(rarity_columns)}) VALUES ({', '.join(rarity_values)});\n")
+                except:
+                    pass
+            
+            f.write("END $$;\n\n")
     
     print(f"SQL文件已生成: {output_file}")
     return output_file 

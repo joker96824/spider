@@ -1,6 +1,7 @@
 # Spider data and Images
 *.xlsx
 *.jpg
+*.sql
 card_images/
 
 # Python
