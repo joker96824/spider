@@ -1,10 +1,11 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext
+from tkinter import ttk, scrolledtext, messagebox
 from fetcher import get_card_links, fetch_card_page, cleanup, download_card_images, convert_to_sql
 import threading
 import pandas as pd
 import os
 import sys
+import re
 
 class SpiderGUI:
     def __init__(self, root):
@@ -14,6 +15,18 @@ class SpiderGUI:
         
         # 绑定窗口关闭事件
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        # 创建状态变量
+        self.status_var = tk.StringVar()
+        self.status_var.set("就绪")
+        
+        # 创建输入框和标签
+        input_frame = ttk.Frame(root)
+        input_frame.pack(pady=5)
+        
+        ttk.Label(input_frame, text="搜索关键词:").pack(side=tk.LEFT, padx=5)
+        self.search_input = ttk.Entry(input_frame, width=40)
+        self.search_input.pack(side=tk.LEFT, padx=5)
         
         # 创建按钮
         self.btn_get_links = ttk.Button(root, text="获取卡片链接", command=self.start_get_links)
@@ -39,6 +52,10 @@ class SpiderGUI:
         self.progress = ttk.Progressbar(root, length=400, mode='determinate')
         self.progress.pack(pady=10)
         
+        # 创建状态标签
+        self.status_label = ttk.Label(root, textvariable=self.status_var)
+        self.status_label.pack(pady=5)
+        
         # 创建显示框
         self.text_area = scrolledtext.ScrolledText(root, width=60, height=15)
         self.text_area.pack(pady=10)
@@ -47,6 +64,24 @@ class SpiderGUI:
         self.card_links = []
         self.url = "https://vgcard.yimieji.com/"
         self.is_closing = False
+
+    def get_filenames(self):
+        """根据搜索关键词获取文件名"""
+        search_keyword = self.search_input.get().strip()
+        if search_keyword:
+            safe_keyword = re.sub(r'[\\/:*?"<>|]', '_', search_keyword)
+            return {
+                'links': f'card_links_{safe_keyword}.xlsx',
+                'info': f'card_info_{safe_keyword}.xlsx',
+                'sql': f'card_data_{safe_keyword}.sql',
+                'images': f'card_images_{safe_keyword}'
+            }
+        return {
+            'links': 'card_links.xlsx',
+            'info': 'card_info.xlsx',
+            'sql': 'card_data.sql',
+            'images': 'card_images'
+        }
         
     def log(self, message):
         """在文本框中显示日志"""
@@ -67,9 +102,11 @@ class SpiderGUI:
     def get_links_thread(self):
         """获取链接的线程函数"""
         try:
-            self.card_links = get_card_links(self.url)
+            search_keyword = self.search_input.get().strip()
+            self.card_links = get_card_links(self.url, search_keyword)
             if not self.is_closing:
-                self.log(f"成功获取 {len(self.card_links)} 个卡片链接")
+                filenames = self.get_filenames()
+                self.log(f"成功获取 {len(self.card_links)} 个卡片链接，保存到 {filenames['links']}")
         except Exception as e:
             if not self.is_closing:
                 self.log(f"获取链接时出错: {str(e)}")
@@ -82,7 +119,8 @@ class SpiderGUI:
         if self.is_closing:
             return
             
-        if not os.path.exists('card_links.xlsx'):
+        filenames = self.get_filenames()
+        if not os.path.exists(filenames['links']):
             self.log("请先获取卡片链接！")
             return
             
@@ -95,17 +133,19 @@ class SpiderGUI:
     def fetch_pages_thread(self):
         """爬取页面的线程函数"""
         try:
+            filenames = self.get_filenames()
+            
             # 读取xlsx文件
-            df = pd.read_excel('card_links.xlsx')
+            df = pd.read_excel(filenames['links'])
             card_links = df['link'].tolist()
             total = len(card_links)
             self.progress['maximum'] = total
             
             # 如果勾选了跳过选项，读取已存在的card_info.xlsx
             existing_codes = set()
-            if self.skip_existing.get() and os.path.exists('card_info.xlsx'):
+            if self.skip_existing.get() and os.path.exists(filenames['info']):
                 try:
-                    existing_df = pd.read_excel('card_info.xlsx')
+                    existing_df = pd.read_excel(filenames['info'])
                     existing_codes = set(existing_df['代码'].tolist())
                     self.log(f"找到 {len(existing_codes)} 条已爬取记录")
                 except Exception as e:
@@ -154,9 +194,9 @@ class SpiderGUI:
             # 保存所有卡片信息到xlsx文件
             if all_card_data:
                 result_df = pd.DataFrame(all_card_data)
-                result_df.to_excel('card_info.xlsx', index=False)
+                result_df.to_excel(filenames['info'], index=False)
                 if not self.is_closing:
-                    self.log(f"所有卡片信息已保存到 card_info.xlsx，共 {len(all_card_data)} 条记录")
+                    self.log(f"所有卡片信息已保存到 {filenames['info']}，共 {len(all_card_data)} 条记录")
                 
             if not self.is_closing:
                 self.log("所有页面爬取完成！")
@@ -173,7 +213,8 @@ class SpiderGUI:
         if self.is_closing:
             return
             
-        if not os.path.exists('card_info.xlsx'):
+        filenames = self.get_filenames()
+        if not os.path.exists(filenames['info']):
             self.log("请先爬取卡片数据！")
             return
             
@@ -186,16 +227,17 @@ class SpiderGUI:
     def download_images_thread(self):
         """下载图片的线程函数"""
         try:
+            filenames = self.get_filenames()
             # 读取卡片数据
-            df = pd.read_excel('card_info.xlsx')
+            df = pd.read_excel(filenames['info'])
             total = len(df)
             self.progress['maximum'] = total
             
             # 下载图片
-            downloaded, total = download_card_images(df)
+            downloaded, total = download_card_images(df, output_dir=filenames['images'])
             
             if not self.is_closing:
-                self.log(f"图片下载完成！成功下载 {downloaded}/{total} 张图片")
+                self.log(f"图片下载完成！成功下载 {downloaded}/{total} 张图片，保存在 {filenames['images']} 目录")
         except Exception as e:
             if not self.is_closing:
                 self.log(f"下载图片时出错: {str(e)}")
@@ -209,7 +251,8 @@ class SpiderGUI:
         if self.is_closing:
             return
             
-        if not os.path.exists('card_info.xlsx'):
+        filenames = self.get_filenames()
+        if not os.path.exists(filenames['info']):
             self.log("请先爬取卡片数据！")
             return
             
@@ -220,22 +263,32 @@ class SpiderGUI:
         thread.start()
         
     def export_sql_thread(self):
-        """导出SQL的线程函数"""
+        """导出SQL文件的线程函数"""
         try:
-            # 读取卡片数据
-            df = pd.read_excel('card_info.xlsx')
+            # 获取文件名
+            filenames = self.get_filenames()
+            info_file = filenames['info']
             
-            # 导出SQL文件
-            output_file = convert_to_sql(df)
+            # 读取Excel文件
+            df = pd.read_excel(info_file)
             
-            if not self.is_closing:
-                self.log(f"SQL文件导出完成！文件保存在: {output_file}")
+            # 获取搜索关键词
+            search_keyword = self.search_input.get().strip()
+            
+            # 转换为SQL
+            sql_file = convert_to_sql(df, search_keyword=search_keyword)
+            
+            # 更新状态
+            self.status_var.set(f"SQL文件已生成: {sql_file}")
+            self.log(f"SQL文件已生成: {sql_file}")
+            messagebox.showinfo("成功", f"SQL文件已生成: {sql_file}")
         except Exception as e:
-            if not self.is_closing:
-                self.log(f"导出SQL文件时出错: {str(e)}")
+            error_msg = f"导出SQL文件失败: {str(e)}"
+            self.status_var.set(error_msg)
+            self.log(error_msg)
+            messagebox.showerror("错误", error_msg)
         finally:
-            if not self.is_closing:
-                self.btn_export_sql.config(state='normal')
+            self.btn_export_sql.config(state='normal')
 
     def on_closing(self):
         """窗口关闭时的处理函数"""
