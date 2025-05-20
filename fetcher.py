@@ -268,7 +268,12 @@ def convert_to_sql(df, output_file='card_data.sql', search_keyword=None):
         safe_keyword = re.sub(r'[\\/:*?"<>|]', '_', search_keyword)
         # 获取文件名和扩展名
         file_name, file_ext = os.path.splitext(output_file)
-        output_file = f"{file_name}_{safe_keyword}{file_ext}"
+        create_file = f"{file_name}_create{safe_keyword}{file_ext}"
+        insert_file = f"{file_name}_insert{safe_keyword}{file_ext}"
+    else:
+        file_name, file_ext = os.path.splitext(output_file)
+        create_file = f"{file_name}_create{file_ext}"
+        insert_file = f"{file_name}_insert{file_ext}"
     
     # 准备API调用数据
     api_data = []
@@ -308,8 +313,8 @@ def convert_to_sql(df, output_file='card_data.sql', search_keyword=None):
         '图片': 'image_url'
     }
     
-    # 创建SQL文件
-    with open(output_file, 'w', encoding='utf-8') as f:
+    # 创建表结构文件
+    with open(create_file, 'w', encoding='utf-8') as f:
         # 写入创建表的SQL语句
         f.write("-- 创建Card表\n")
         f.write("DROP TABLE IF EXISTS Card CASCADE;\n")
@@ -410,6 +415,8 @@ def convert_to_sql(df, output_file='card_data.sql', search_keyword=None):
         f.write("    quote TEXT,\n")
         f.write("    illustrator TEXT,\n")
         f.write("    image_url TEXT,\n")
+        f.write("    create_user_id TEXT NOT NULL DEFAULT current_user,\n")
+        f.write("    update_user_id TEXT NOT NULL DEFAULT current_user,\n")
         f.write("    create_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,\n")
         f.write("    update_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,\n")
         f.write("    UNIQUE(pack_name, card_number)\n")
@@ -425,6 +432,8 @@ def convert_to_sql(df, output_file='card_data.sql', search_keyword=None):
         f.write("COMMENT ON COLUMN CardRarity.quote IS '卡牌台词';\n")
         f.write("COMMENT ON COLUMN CardRarity.illustrator IS '绘师';\n")
         f.write("COMMENT ON COLUMN CardRarity.image_url IS '卡牌图片URL';\n")
+        f.write("COMMENT ON COLUMN CardRarity.create_user_id IS '创建用户';\n")
+        f.write("COMMENT ON COLUMN CardRarity.update_user_id IS '更新用户';\n")
         f.write("COMMENT ON COLUMN CardRarity.create_time IS '创建时间';\n")
         f.write("COMMENT ON COLUMN CardRarity.update_time IS '更新时间';\n\n")
         
@@ -439,7 +448,9 @@ def convert_to_sql(df, output_file='card_data.sql', search_keyword=None):
         f.write("CREATE INDEX idx_card_rarity_card_id ON CardRarity(card_id);\n")
         f.write("CREATE INDEX idx_card_rarity_pack_name ON CardRarity(pack_name);\n")
         f.write("CREATE INDEX idx_card_rarity_illustrator ON CardRarity(illustrator);\n\n")
-        
+    
+    # 创建数据插入文件
+    with open(insert_file, 'w', encoding='utf-8') as f:
         # 写入插入数据的SQL语句
         f.write("-- 插入数据\n")
         for _, row in df.iterrows():
@@ -575,8 +586,8 @@ def convert_to_sql(df, output_file='card_data.sql', search_keyword=None):
                 try:
                     rarity_list = ast.literal_eval(row['稀有度'])
                     for rarity in rarity_list:
-                        rarity_columns = ['card_id']
-                        rarity_values = ['v_card_id']  # 使用变量而不是函数调用
+                        rarity_columns = ['card_id', 'create_user_id', 'update_user_id']
+                        rarity_values = ['v_card_id', 'current_user', 'current_user']  # 使用变量而不是函数调用
                         
                         rarity_info = {}
                         for old_key, new_key in rarity_mapping.items():
@@ -609,15 +620,19 @@ def convert_to_sql(df, output_file='card_data.sql', search_keyword=None):
     # 调用API上传数据
     if api_data:
         try:
-            url = "http://localhost:8000/api/v1/card_import/import/batch"
+            url = "http://118.25.45.131:8000/api/v1/card_import/import/batch"
             headers = {
                 "Content-Type": "application/json"
             }
             response = requests.post(url, json=api_data, headers=headers)
-            print(f"API调用状态码: {response.status_code}")
-            print(f"API响应内容: {response.json()}")
+            if response.status_code == 200:
+                print(f"API调用成功: {response.json()}")
+            else:
+                print(f"API调用失败，状态码: {response.status_code}")
+                print(f"错误信息: {response.text}")
         except Exception as e:
             print(f"API调用失败: {str(e)}")
+            print("请确保API服务已启动并正常运行")
     
-    print(f"SQL文件已生成: {output_file}")
-    return output_file 
+    print(f"SQL文件已生成: {create_file}, {insert_file}")
+    return create_file, insert_file 
