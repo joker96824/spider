@@ -620,7 +620,10 @@ def convert_to_sql(df, output_file='card_data.sql', search_keyword=None):
     # 调用API上传数据
     if api_data:
         try:
-            url = "http://118.25.45.131:8000/api/v1/card_import/import/batch"
+            # 本地上传测试环境
+            # url = "http://localhost:8000/api/v1/card_import/import/batch"
+            # 线上上传正式环境
+            url = "http://124.222.36.231:8000/api/v1/card_import/import/batch"
             headers = {
                 "Content-Type": "application/json"
             }

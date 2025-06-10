@@ -142,12 +142,13 @@ class SpiderGUI:
             self.progress['maximum'] = total
             
             # 如果勾选了跳过选项，读取已存在的card_info.xlsx
-            existing_codes = set()
+            unexisting_codes = set()
             if self.skip_existing.get() and os.path.exists(filenames['info']):
                 try:
                     existing_df = pd.read_excel(filenames['info'])
-                    existing_codes = set(existing_df['代码'].tolist())
-                    self.log(f"找到 {len(existing_codes)} 条已爬取记录")
+                    # 获取中文名为空的行对应的代码
+                    unexisting_codes = set(existing_df[existing_df['中文名'].isna()]['代码'].tolist())
+                    print(f"找到 {len(unexisting_codes)} 条需要重新爬取的记录（中文名为空的记录）")
                 except Exception as e:
                     self.log(f"读取已存在文件时出错: {str(e)}")
             
@@ -158,10 +159,14 @@ class SpiderGUI:
                     
                 code = df.iloc[idx-1]['code']
                 
-                # 如果勾选了跳过选项且该卡片已爬取，则跳过
-                if self.skip_existing.get() and code in existing_codes:
+                # 如果勾选了跳过选项且该卡片已爬取，则使用已有数据
+                if self.skip_existing.get() and code not in unexisting_codes:
                     if not self.is_closing:
-                        self.log(f"跳过已爬取的第 {idx}/{total} 个页面 - 代码: {code}")
+                        self.log(f"使用已有数据第 {idx}/{total} 个页面 - 代码: {code}")
+                    # 从已有数据中获取该代码对应的行
+                    existing_row = existing_df[existing_df['代码'] == code].iloc[0]
+                    card_info = existing_row.to_dict()
+                    all_card_data.append(card_info)
                     continue
                     
                 try:
