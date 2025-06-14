@@ -243,14 +243,14 @@ def fetch_all_pages(total_pages, should_stop=None):
     filename = "ws_cards.xlsx"
     base_url = "https://ws-tcg.com/cardlist/search?page={}"
     
+    # 在循环外部读取Excel文件
+    df = check_and_create_excel(filename)
+    
     for page in range(1, total_pages + 1):
         if should_stop and should_stop():
             return
             
         print(f"\n正在获取第 {page} 页数据...")
-        
-        # 读取Excel文件
-        df = check_and_create_excel(filename)
         
         # 计算当前页面的数据应该插入的位置
         start_row = (page - 1) * 25
