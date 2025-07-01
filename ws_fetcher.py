@@ -280,6 +280,108 @@ def fetch_all_pages(total_pages, should_stop=None):
         else:
             print(f"第 {page} 页数据已存在，跳过")
 
+def download_card_images():
+    """下载卡片图片"""
+    filename = "ws_cards.xlsx"
+    output_dir = "ws_card_images"
+    
+    # 创建输出目录
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    # 读取Excel文件
+    df = pd.read_excel(filename)
+    
+    # 下载进度
+    total = len(df)
+    downloaded = 0
+    skipped = 0
+    
+    # 设置请求头
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        'Referer': 'https://ws-tcg.com/',
+        'Connection': 'keep-alive'
+    }
+    
+    # 创建session对象
+    session = requests.Session()
+    session.headers.update(headers)
+    
+    for idx, row in df.iterrows():
+        try:
+            # 获取图片URL和卡片代码
+            image_url = row['图片']
+            card_code = row['卡片代码']
+            
+            if pd.isna(image_url) or pd.isna(card_code):
+                print(f"第 {idx + 1} 行数据不完整，跳过")
+                skipped += 1
+                continue
+            
+            # 处理卡片代码中的'/'
+            if '/' in card_code:
+                # 分割卡片代码
+                parts = card_code.split('/')
+                # 创建子文件夹路径
+                sub_dir = os.path.join(output_dir, parts[0])
+                # 确保子文件夹存在
+                if not os.path.exists(sub_dir):
+                    os.makedirs(sub_dir)
+                # 构建完整的文件路径
+                file_path = os.path.join(sub_dir, f"{parts[1]}.jpg")
+            else:
+                # 如果没有'/'，直接使用卡片代码作为文件名
+                file_path = os.path.join(output_dir, f"{card_code}.jpg")
+            
+            # 检查文件是否已存在
+            if os.path.exists(file_path):
+                print(f"图片已存在，跳过: {card_code}")
+                skipped += 1
+                continue
+            
+            # 添加重试机制
+            max_retries = 3
+            retry_delay = 2
+            
+            for retry in range(max_retries):
+                try:
+                    # 下载图片
+                    response = session.get(image_url, timeout=30)
+                    if response.status_code == 200:
+                        with open(file_path, 'wb') as f:
+                            f.write(response.content)
+                        downloaded += 1
+                        print(f"已下载图片: {card_code}")
+                        break
+                    else:
+                        print(f"下载失败，状态码: {response.status_code}, 卡片代码: {card_code}")
+                        if retry < max_retries - 1:
+                            print(f"第 {retry + 1} 次重试...")
+                            time.sleep(retry_delay)
+                        else:
+                            skipped += 1
+                except requests.exceptions.RequestException as e:
+                    if retry < max_retries - 1:
+                        print(f"下载出错，第 {retry + 1} 次重试... 卡片代码: {card_code}")
+                        time.sleep(retry_delay)
+                    else:
+                        print(f"下载失败，卡片代码: {card_code}, 错误: {str(e)}")
+                        skipped += 1
+                
+        except Exception as e:
+            print(f"处理图片时出错: {str(e)}, 卡片代码: {card_code if 'card_code' in locals() else '未知'}")
+            skipped += 1
+            continue
+        
+        # 添加随机延迟，避免请求过快
+        time.sleep(random.uniform(0.5, 1.5))
+    
+    print(f"下载完成！成功下载: {downloaded}，跳过: {skipped}，总计: {total}")
+    return downloaded, total
+
 if __name__ == "__main__":
     # 获取用户输入的总页数
     while True:
